@@ -8,7 +8,7 @@ resource "aws_security_group" "ssh_access" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["201.189.206.99/32"] # Permitir desde mi dirección IPv4
+    cidr_blocks = ["0.0.0.0/0"] # Permitir desde mi dirección IPv4
   }
 
   egress {
