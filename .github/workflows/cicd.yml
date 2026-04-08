@@ -31,7 +31,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          [cite_start]terraform_version: "1.14.8" # Alineado con tu provider.tf 
+          terraform_version: "1.14.8" # Alineado con tu provider.tf 
           terraform_wrapper: false
 
       # --- NUEVO: INTEGRACIÓN DE TFLINT ---
