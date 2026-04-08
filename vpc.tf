@@ -1,100 +1,125 @@
-# 1. Configuración de KMS (Aprobado para CKV_AWS_158)
-resource "aws_kms_key" "log_key" {
-  description             = "Llave para cifrar logs de CloudWatch" [cite: 17]
-  deletion_window_in_days = 7 [cite: 17]
-  enable_key_rotation     = true # Pasa CKV_AWS_7 [cite: 17]
-}
-
-resource "aws_kms_alias" "log_key_alias" {
-  name          = "alias/cloudwatch-logs-key" [cite: 17]
-  target_key_id = aws_kms_key.log_key.key_id [cite: 17]
-}
-
-# Política de la llave KMS para CloudWatch
-resource "aws_kms_key_policy" "log_key_policy" {
-  key_id = aws_kms_key.log_key.id [cite: 17]
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions" [cite: 18]
-        Effect = "Allow" [cite: 18]
-        Principal = { AWS = "*" } [cite: 18]
-        Action   = "kms:*" [cite: 18]
-        Resource = "*" [cite: 18]
-      },
-      {
-        Sid    = "Allow CloudWatch Logs" [cite: 19]
-        Effect = "Allow" [cite: 19]
-        Principal = { Service = "logs.amazonaws.com" } [cite: 19]
-        Action = [
-          "kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*",
-          "kms:GenerateDataKey*", "kms:Describe*" [cite: 19, 20]
-        ]
-        Resource = "*" 
-      }
-    ]
-  })
-}
-
-# 2. Infraestructura de Red
+# Crear la VPC
 resource "aws_vpc" "mi_vpc" {
-  cidr_block           = "10.0.0.0/16" 
-  enable_dns_hostnames = true 
-  enable_dns_support   = true 
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "mi-vpc"
+  }
 }
 
-# --- SOLUCIÓN PARA CKV2_AWS_12 ---
-# Este bloque toma el SG que AWS crea por defecto y le quita todas las reglas.
-resource "aws_default_security_group" "default" {
+# Crear un Internet Gateway
+resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.mi_vpc.id
+  tags = {
+    Name = "mi-igw"
+  }
 }
 
-# Subnets (Pasan CKV_AWS_130)
+# Crear subnets públicas
 resource "aws_subnet" "subnet_publica_1" {
-  vpc_id                  = aws_vpc.mi_vpc.id [cite: 21]
-  cidr_block              = "10.0.1.0/24" [cite: 21]
-  map_public_ip_on_launch = false [cite: 21]
+  vpc_id                  = aws_vpc.mi_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "subnet-publica-1"
+  }
 }
 
 resource "aws_subnet" "subnet_publica_2" {
-  vpc_id                  = aws_vpc.mi_vpc.id [cite: 21]
-  cidr_block              = "10.0.2.0/24" [cite: 21]
-  map_public_ip_on_launch = false [cite: 21]
+  vpc_id                  = aws_vpc.mi_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "subnet-publica-2"
+  }
 }
 
+# Crear subnets privadas
 resource "aws_subnet" "subnet_privada_1" {
-  vpc_id                  = aws_vpc.mi_vpc.id [cite: 22]
-  cidr_block              = "10.0.3.0/24" [cite: 22]
-  map_public_ip_on_launch = false [cite: 22]
+  vpc_id            = aws_vpc.mi_vpc.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "us-east-1a"
+  tags = {
+    Name = "subnet-privada-1"
+  }
 }
 
 resource "aws_subnet" "subnet_privada_2" {
-  vpc_id                  = aws_vpc.mi_vpc.id [cite: 22]
-  cidr_block              = "10.0.4.0/24" [cite: 22]
-  map_public_ip_on_launch = false [cite: 22]
+  vpc_id            = aws_vpc.mi_vpc.id
+  cidr_block        = "10.0.4.0/24"
+  availability_zone = "us-east-1b"
+  tags = {
+    Name = "subnet-privada-2"
+  }
 }
 
-# 3. Logging (Aprobado para CKV_AWS_158, 338 y 66)
-resource "aws_cloudwatch_log_group" "vpc_log_group" {
-  name              = "/aws/vpc/flow-logs-v2" [cite: 23]
-  retention_in_days = 365 [cite: 23]
-  kms_key_id        = aws_kms_key.log_key.arn [cite: 23]
-}
-
-resource "aws_flow_log" "mi_flow_log" {
-  iam_role_arn    = data.aws_iam_role.lab_role.arn [cite: 23]
-  log_destination = aws_cloudwatch_log_group.vpc_log_group.arn [cite: 23]
-  traffic_type    = "ALL" [cite: 23]
-  vpc_id          = aws_vpc.mi_vpc.id [cite: 23]
-}
-
-# 4. Otros Recursos
+# Crear un NAT Gateway
 resource "aws_eip" "nat_eip" {
-  domain = "vpc" [cite: 24]
+  domain = "vpc" # <--- Cambia 'vpc = true' por esto
+  tags = {
+    Name = "nat-eip"
+  }
 }
 
 resource "aws_nat_gateway" "nat_gw" {
-  allocation_id = aws_eip.nat_eip.id [cite: 24]
-  subnet_id     = aws_subnet.subnet_publica_1.id [cite: 24]
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.subnet_publica_1.id
+  tags = {
+    Name = "nat-gw"
+  }
+}
+
+# Tabla de enrutamiento pública
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.mi_vpc.id
+  tags = {
+    Name = "public-rt"
+  }
+}
+
+# Asociar subnets públicas a la tabla pública
+resource "aws_route_table_association" "public_assoc_1" {
+  subnet_id      = aws_subnet.subnet_publica_1.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "public_assoc_2" {
+  subnet_id      = aws_subnet.subnet_publica_2.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+# Crear ruta para Internet en la tabla pública
+resource "aws_route" "public_route" {
+  route_table_id         = aws_route_table.public_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.igw.id
+}
+
+# Tabla de enrutamiento privada
+resource "aws_route_table" "private_rt" {
+  vpc_id = aws_vpc.mi_vpc.id
+  tags = {
+    Name = "private-rt"
+  }
+}
+
+# Asociar subnets privadas a la tabla privada
+resource "aws_route_table_association" "private_assoc_1" {
+  subnet_id      = aws_subnet.subnet_privada_1.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+resource "aws_route_table_association" "private_assoc_2" {
+  subnet_id      = aws_subnet.subnet_privada_2.id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+# Crear ruta para NAT en la tabla privada
+resource "aws_route" "private_route" {
+  route_table_id         = aws_route_table.private_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.nat_gw.id
 }
