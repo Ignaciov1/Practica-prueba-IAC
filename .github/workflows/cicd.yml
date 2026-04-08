@@ -1,4 +1,4 @@
-name: "Terraform CI/CD con Seguridad."
+name: "Terraform CI/CD con Seguridad"
 
 on:
   push:
@@ -31,7 +31,21 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
+          [cite_start]terraform_version: "1.14.8" # Alineado con tu provider.tf 
           terraform_wrapper: false
+
+      # --- NUEVO: INTEGRACIÓN DE TFLINT ---
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint
+        run: tflint --init
+
+      - name: Run TFLint
+        run: tflint -f compact
+      # ------------------------------------
 
       - name: Install Checkov
         run: |
@@ -65,17 +79,15 @@ jobs:
 
       - name: OPA Policy Evaluation - Name Check
         run: |
-          # Extrae el campo status del objeto allow
-          RESULT=$(opa eval -i tfplan.json -d terraform_name_check.rego "data.terraform.authz.allow.status" --format json)
+          RESULT=$(opa eval -i tfplan.json -d terraform_name_check.rego "data.terraform.authz.allow.status" --format json) [cite: 1, 2, 3]
           echo "Resultado Name Check: $RESULT"
           echo "$RESULT" | grep -q "true" || (echo "ERROR: La instancia no cumple con el nombre requerido." && exit 1)
 
       - name: OPA Policy Evaluation - Region Check
         run: |
-          # Evalúa si la región es permitida
-          RESULT=$(opa eval -i tfplan.json -d terraform_region_check.rego "data.terraform_region_check.allow" --format json)
+          RESULT=$(opa eval -i tfplan.json -d terraform_region_check.rego "data.terraform_region_check.allow" --format json) [cite: 4]
           echo "Resultado Region Check: $RESULT"
-          echo "$RESULT" | grep -q "true" || (echo "ERROR: Región de AWS no permitida (debe ser us-east-1)." && exit 1)
+          echo "$RESULT" | grep -q "true" || (echo "ERROR: Región de AWS no permitida." && exit 1)
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
@@ -90,7 +102,7 @@ jobs:
     name: "Terraform Destroy (Confirmación Manual)"
     runs-on: ubuntu-latest
     needs: terraform
-    environment: destroy-approval
+    environment: destroy-approval # Recuerda configurar este entorno en GitHub Settings
 
     steps:
       - name: Checkout
