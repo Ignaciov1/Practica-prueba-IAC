@@ -1,16 +1,20 @@
 package terraform_region_check
 
-default allow = true
+import future.keywords.if
 
-# Niega si el provider no es us-east-1
-deny[msg] {
-    provider := input.provider_configurations[_]
-    provider.type == "aws"
-    provider.configuration.region != "us-east-1"
-    msg := sprintf("El provider AWS debe usar la región us-east-1 (Virginia), se encontró %v", [provider.configuration.region])
+# Por defecto, NO permitimos nada (esto es más seguro)
+default allow = false
+
+# Definimos cuándo SÍ está permitido
+allow if {
+    # Buscamos la configuración del provider de AWS
+    region := input.configuration.provider_config.aws.expressions.region.constant_value
+    region == "us-east-1"
 }
 
-# Si hay algún mensaje en deny, allow pasa a ser falso
-allow = false {
-    count(deny) > 0
+# Si quieres mantener los mensajes de error para el log:
+deny[msg] if {
+    region := input.configuration.provider_config.aws.expressions.region.constant_value
+    region != "us-east-1"
+    msg := sprintf("Error: Se intentó usar la región %v, pero solo se permite us-east-1", [region])
 }
