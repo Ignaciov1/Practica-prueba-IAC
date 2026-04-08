@@ -1,4 +1,4 @@
-name: "Terraform CI/CD con Seguridad"
+name: "Terraform CI/CD con Seguridad."
 
 on:
   push:
