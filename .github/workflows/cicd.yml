@@ -65,17 +65,17 @@ jobs:
 
       - name: OPA Policy Evaluation - Name Check
         run: |
-          RESULT=$(opa eval -i tfplan.json -d terraform_name_check.rego "data.terraform.authz.allow" --format json)
-          echo "Resultado terraform_name_check: $RESULT"
-          echo "$RESULT" | grep -q '"status":true' || echo "WARNING: terraform_name_check no pasó"
-          echo "Evaluación terraform_name_check finalizada."
+          # Extrae el campo status del objeto allow
+          RESULT=$(opa eval -i tfplan.json -d terraform_name_check.rego "data.terraform.authz.allow.status" --format json)
+          echo "Resultado Name Check: $RESULT"
+          echo "$RESULT" | grep -q "true" || (echo "ERROR: La instancia no cumple con el nombre requerido." && exit 1)
 
       - name: OPA Policy Evaluation - Region Check
         run: |
+          # Evalúa si la región es permitida
           RESULT=$(opa eval -i tfplan.json -d terraform_region_check.rego "data.terraform_region_check.allow" --format json)
-          echo "Resultado terraform_region_check: $RESULT"
-          echo "$RESULT" | grep -q 'true' || echo "WARNING: terraform_region_check no pasó"
-          echo "Evaluación terraform_region_check finalizada."
+          echo "Resultado Region Check: $RESULT"
+          echo "$RESULT" | grep -q "true" || (echo "ERROR: Región de AWS no permitida (debe ser us-east-1)." && exit 1)
 
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan

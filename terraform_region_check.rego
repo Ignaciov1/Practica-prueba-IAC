@@ -2,7 +2,7 @@ package terraform_region_check
 
 default allow = true
 
-# Verifica que el provider de Terraform use la región east-us-1 (Virginia)
+# Niega si el provider no es us-east-1
 deny[msg] {
     provider := input.provider_configurations[_]
     provider.type == "aws"
@@ -10,7 +10,7 @@ deny[msg] {
     msg := sprintf("El provider AWS debe usar la región us-east-1 (Virginia), se encontró %v", [provider.configuration.region])
 }
 
+# Si hay algún mensaje en deny, allow pasa a ser falso
 allow = false {
-    deny[_]
-    msg := "Region no correcta"
+    count(deny) > 0
 }
