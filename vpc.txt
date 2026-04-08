@@ -79,112 +79,17 @@ resource "aws_subnet" "subnet_privada_2" {
 }
 
 # 3. Logging (CloudWatch y Flow Logs)
-# Este recurso fallaba (CKV_AWS_158), ahora incluye kms_key_id.
 resource "aws_cloudwatch_log_group" "vpc_log_group" {
-  name              = "/aws/vpc/flow-logs"
-  retention_in_days = 365                # Pasa CKV_AWS_338 y CKV_AWS_66 [cite: 3]
-  kms_key_id        = aws_kms_key.log_key.arn # SOLUCIÓN AL ERROR
+  name              = "/aws/vpc/flow-logs-v2" # <-- Se agrega "-v2" para solucionar el error
+  retention_in_days = 365                
+  kms_key_id        = aws_kms_key.log_key.arn 
 }
 
 resource "aws_flow_log" "mi_flow_log" {
-  iam_role_arn    = aws_iam_role.flow_log_role.arn
+  iam_role_arn    = data.aws_iam_role.lab_role.arn # <-- Usamos el LabRole
   log_destination = aws_cloudwatch_log_group.vpc_log_group.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.mi_vpc.id
-}
-
-# 4. Seguridad (Security Groups)
-resource "aws_security_group" "ssh_access" {
-  name        = "ssh_access"
-  description = "Permitir SSH desde IP especifica" # Pasa CKV_AWS_23 
-  vpc_id      = aws_vpc.mi_vpc.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["200.0.0.1/32"] # Pasa CKV_AWS_24 al no ser 0.0.0.0/0 
-  }
-
-  egress {
-    description = "Salida total"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# 5. Instancia EC2
-resource "aws_instance" "mi_ec2" {
-  ami                         = "ami-0c101f26f147fa7fd"
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.subnet_privada_1.id
-  vpc_security_group_ids      = [aws_security_group.ssh_access.id]
-  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
-  associate_public_ip_address = false       # Pasa CKV_AWS_88 [cite: 5]
-  monitoring                  = true        # Pasa CKV_AWS_126 [cite: 5]
-  ebs_optimized               = true        # Pasa CKV_AWS_135 [cite: 5]
-
-  # Pasa CKV_AWS_79 (Obliga IMDSv2) 
-  metadata_options {
-    http_endpoint = "enabled"
-    http_tokens   = "required"
-  }
-
-  # Pasa CKV_AWS_8 (Cifrado de disco) [cite: 5]
-  root_block_device {
-    encrypted = true
-  }
-
-  tags = {
-    Name = "MiInstanciaSegura"
-  }
-}
-
-# 6. IAM (Roles y Perfiles)
-# Ambos roles pasan CKV_AWS_274 (No AdministratorAccess) y CKV_AWS_60/61 
-resource "aws_iam_role" "flow_log_role" {
-  name = "flow_log_role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "flow_log_policy" {
-  name = "flow_log_policy"
-  role = aws_iam_role.flow_log_role.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"]
-      Effect   = "Allow"
-      Resource = "*"
-    }]
-  })
-}
-
-resource "aws_iam_role" "role_ec2" {
-  name = "role_ec2"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2_profile"
-  role = aws_iam_role.role_ec2.name
 }
 
 # 7. Otros Recursos (NAT Gateway, EIP)
