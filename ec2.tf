@@ -31,6 +31,6 @@ resource "aws_instance" "mi_ec2" {
   vpc_security_group_ids = [aws_security_group.ssh_access.id]
 
   tags = {
-    Name = "MY-EC2-Instance"
+    Name = "Instancia-erronea"
   }
 }
